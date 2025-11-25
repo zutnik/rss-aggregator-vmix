@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSS Агрегатор</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background-pattern"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="5" cy="19" r="2"/>
+                        <path d="M4 4a16 16 0 0 1 16 16"/>
+                        <path d="M4 11a9 9 0 0 1 9 9"/>
+                    </svg>
+                </div>
+                <h1>RSS Агрегатор</h1>
+            </div>
+            <p class="subtitle">Локальний сервер для агрегації RSS-стрічок</p>
+        </header>
+
+        <section class="add-feed-section">
+            <h2>Додати нову стрічку</h2>
+            <form id="addFeedForm" class="add-feed-form">
+                <div class="input-group">
+                    <input 
+                        type="url" 
+                        id="feedUrl" 
+                        placeholder="https://example.com/feed/" 
+                        required
+                    >
+                    <input 
+                        type="text" 
+                        id="feedName" 
+                        placeholder="Назва (необов'язково)"
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Додати
+                </button>
+            </form>
+        </section>
+
+        <section class="rss-endpoints">
+            <h2>🔗 RSS-ендпоінти для інших програм</h2>
+            <div class="endpoints-grid">
+                <div class="endpoint-card">
+                    <span class="endpoint-label">Всі стрічки:</span>
+                    <code id="allFeedsUrl">http://localhost:8080/rss/all</code>
+                    <button class="btn-copy" onclick="copyToClipboard('allFeedsUrl')">📋</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="feeds-section">
+            <div class="section-header">
+                <h2>Підключені стрічки</h2>
+                <button id="refreshBtn" class="btn btn-secondary" onclick="refreshFeeds()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 2v6h-6"/>
+                        <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                        <path d="M3 22v-6h6"/>
+                        <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                    </svg>
+                    Оновити всі
+                </button>
+            </div>
+
+            <div id="feedsList" class="feeds-list">
+                {% for feed in feeds %}
+                <div class="feed-card" data-feed-id="{{ feed.id }}">
+                    <div class="feed-info">
+                        <h3 class="feed-title">{{ feed.name }}</h3>
+                        <p class="feed-url">{{ feed.url }}</p>
+                        <div class="feed-meta">
+                            <span class="item-count">📰 {{ feed.item_count }} новин</span>
+                            {% if feed.last_updated %}
+                            <span class="last-updated">🕒 {{ feed.last_updated }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="feed-actions">
+                        <button class="btn btn-icon" onclick="viewFeed({{ feed.id }})" title="Переглянути">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon" onclick="copyFeedUrl({{ feed.id }})" title="Копіювати RSS URL">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon btn-danger" onclick="deleteFeed({{ feed.id }})" title="Видалити">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3,6 5,6 21,6"/>
+                                <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">📡</div>
+                    <p>Ще немає підключених стрічок</p>
+                    <p class="hint">Додайте вашу першу RSS-стрічку вище</p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal for viewing feed items -->
+    <div id="feedModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Новини</h2>
+                <button class="btn-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody" class="modal-body">
+                <!-- Items will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+
+

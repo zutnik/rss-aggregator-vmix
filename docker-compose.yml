@@ -1,0 +1,23 @@
+services:
+  rss-aggregator:
+    build: .
+    container_name: rss-aggregator
+    ports:
+      - "5050:5050"
+    volumes:
+      # Persist database between restarts
+      - rss_data:/app/data
+    restart: unless-stopped
+    # Limit resources for low overhead
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    environment:
+      - TZ=Europe/Kyiv
+
+volumes:
+  rss_data:
+
+
