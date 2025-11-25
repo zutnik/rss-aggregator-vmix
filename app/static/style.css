@@ -153,6 +153,11 @@ section h2 {
     min-width: 0;
 }
 
+.input-group input.input-small {
+    flex: 0 0 120px;
+    min-width: 100px;
+}
+
 input[type="url"],
 input[type="text"] {
     background: var(--bg-tertiary);
@@ -410,6 +415,10 @@ input::placeholder {
     animation: modalSlide 0.3s ease;
 }
 
+.modal-content.modal-small {
+    max-width: 400px;
+}
+
 @keyframes modalSlide {
     from {
         opacity: 0;
@@ -461,10 +470,18 @@ input::placeholder {
 .news-item {
     padding: 16px 0;
     border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    transition: var(--transition);
 }
 
 .news-item:last-child {
     border-bottom: none;
+}
+
+.news-item-content {
+    flex: 1;
 }
 
 .news-item h4 {
@@ -496,6 +513,39 @@ input::placeholder {
 .news-item .meta {
     font-size: 0.8rem;
     color: var(--text-muted);
+}
+
+.btn-small {
+    padding: 6px;
+    flex-shrink: 0;
+}
+
+.btn-small svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Edit Form */
+.edit-form .form-group {
+    margin-bottom: 16px;
+}
+
+.edit-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.edit-form input {
+    width: 100%;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
 }
 
 /* Toast */

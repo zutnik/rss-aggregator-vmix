@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSS Агрегатор</title>
+    <title>RSS Агрегатор для VMix</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -24,7 +24,7 @@
                 </div>
                 <h1>RSS Агрегатор</h1>
             </div>
-            <p class="subtitle">Локальний сервер для агрегації RSS-стрічок</p>
+            <p class="subtitle">Локальний сервер для VMix та інших програм</p>
         </header>
 
         <section class="add-feed-section">
@@ -42,6 +42,15 @@
                         id="feedName" 
                         placeholder="Назва (необов'язково)"
                     >
+                    <input 
+                        type="number" 
+                        id="feedMaxItems" 
+                        placeholder="Макс. новин"
+                        min="1"
+                        max="100"
+                        value="30"
+                        class="input-small"
+                    >
                 </div>
                 <button type="submit" class="btn btn-primary">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -54,11 +63,11 @@
         </section>
 
         <section class="rss-endpoints">
-            <h2>🔗 RSS-ендпоінти для інших програм</h2>
+            <h2>🔗 RSS-ендпоінти для VMix</h2>
             <div class="endpoints-grid">
                 <div class="endpoint-card">
                     <span class="endpoint-label">Всі стрічки:</span>
-                    <code id="allFeedsUrl">http://localhost:8080/rss/all</code>
+                    <code id="allFeedsUrl">http://localhost:5050/rss/all</code>
                     <button class="btn-copy" onclick="copyToClipboard('allFeedsUrl')">📋</button>
                 </div>
             </div>
@@ -85,7 +94,7 @@
                         <h3 class="feed-title">{{ feed.name }}</h3>
                         <p class="feed-url">{{ feed.url }}</p>
                         <div class="feed-meta">
-                            <span class="item-count">📰 {{ feed.item_count }} новин</span>
+                            <span class="item-count">📰 {{ feed.item_count }}/{{ feed.max_items or 30 }} новин</span>
                             {% if feed.last_updated %}
                             <span class="last-updated">🕒 {{ feed.last_updated }}</span>
                             {% endif %}
@@ -96,6 +105,12 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                                 <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon" onclick="editFeed({{ feed.id }}, '{{ feed.name }}', {{ feed.max_items or 30 }})" title="Налаштування">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                             </svg>
                         </button>
                         <button class="btn btn-icon" onclick="copyFeedUrl({{ feed.id }})" title="Копіювати RSS URL">
@@ -136,11 +151,36 @@
         </div>
     </div>
 
+    <!-- Modal for editing feed settings -->
+    <div id="editModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Налаштування стрічки</h2>
+                <button class="btn-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editFeedForm" class="edit-form">
+                    <input type="hidden" id="editFeedId">
+                    <div class="form-group">
+                        <label for="editFeedName">Назва</label>
+                        <input type="text" id="editFeedName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMaxItems">Максимум новин</label>
+                        <input type="number" id="editMaxItems" min="1" max="100" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Скасувати</button>
+                        <button type="submit" class="btn btn-primary">Зберегти</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast notifications -->
     <div id="toast" class="toast"></div>
 
     <script src="/static/app.js"></script>
 </body>
 </html>
-
-

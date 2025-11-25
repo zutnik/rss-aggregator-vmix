@@ -19,6 +19,7 @@ async def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 url TEXT UNIQUE NOT NULL,
                 name TEXT NOT NULL,
+                max_items INTEGER DEFAULT 30,
                 last_updated TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -34,6 +35,7 @@ async def init_db():
                 description TEXT,
                 pub_date TIMESTAMP,
                 author TEXT,
+                is_hidden INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (feed_id) REFERENCES feed_sources(id) ON DELETE CASCADE,
                 UNIQUE(feed_id, guid)
@@ -47,15 +49,27 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_feed_items_pub_date ON feed_items(pub_date)
         """)
         
+        # Migration: add max_items column if not exists
+        try:
+            await db.execute("ALTER TABLE feed_sources ADD COLUMN max_items INTEGER DEFAULT 30")
+        except:
+            pass  # Column already exists
+        
+        # Migration: add is_hidden column if not exists
+        try:
+            await db.execute("ALTER TABLE feed_items ADD COLUMN is_hidden INTEGER DEFAULT 0")
+        except:
+            pass  # Column already exists
+        
         await db.commit()
 
 
-async def add_feed_source(url: str, name: str) -> int:
+async def add_feed_source(url: str, name: str, max_items: int = 30) -> int:
     """Add a new feed source"""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute(
-            "INSERT OR IGNORE INTO feed_sources (url, name) VALUES (?, ?)",
-            (url, name)
+            "INSERT OR IGNORE INTO feed_sources (url, name, max_items) VALUES (?, ?, ?)",
+            (url, name, max_items)
         )
         await db.commit()
         
@@ -70,6 +84,22 @@ async def add_feed_source(url: str, name: str) -> int:
         return row[0] if row else 0
 
 
+async def update_feed_source(feed_id: int, name: str = None, max_items: int = None):
+    """Update feed source settings"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        if name is not None:
+            await db.execute(
+                "UPDATE feed_sources SET name = ? WHERE id = ?",
+                (name, feed_id)
+            )
+        if max_items is not None:
+            await db.execute(
+                "UPDATE feed_sources SET max_items = ? WHERE id = ?",
+                (max_items, feed_id)
+            )
+        await db.commit()
+
+
 async def get_all_feed_sources() -> list[dict]:
     """Get all feed sources with item counts"""
     async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -79,9 +109,10 @@ async def get_all_feed_sources() -> list[dict]:
                 fs.id, 
                 fs.url, 
                 fs.name, 
+                COALESCE(fs.max_items, 30) as max_items,
                 fs.last_updated,
                 fs.created_at,
-                COUNT(fi.id) as item_count
+                COUNT(CASE WHEN fi.is_hidden = 0 THEN fi.id END) as item_count
             FROM feed_sources fs
             LEFT JOIN feed_items fi ON fs.id = fi.feed_id
             GROUP BY fs.id
@@ -96,7 +127,8 @@ async def get_feed_source_by_id(feed_id: int) -> Optional[dict]:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT * FROM feed_sources WHERE id = ?", (feed_id,)
+            "SELECT *, COALESCE(max_items, 30) as max_items FROM feed_sources WHERE id = ?", 
+            (feed_id,)
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
@@ -116,8 +148,8 @@ async def add_feed_items(feed_id: int, items: list[dict], max_items: int = 30):
         for item in items:
             await db.execute("""
                 INSERT OR REPLACE INTO feed_items 
-                (feed_id, guid, title, link, description, pub_date, author)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (feed_id, guid, title, link, description, pub_date, author, is_hidden)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
             """, (
                 feed_id,
                 item['guid'],
@@ -134,12 +166,12 @@ async def add_feed_items(feed_id: int, items: list[dict], max_items: int = 30):
             (datetime.now(), feed_id)
         )
         
-        # Keep only the latest max_items
+        # Keep only the latest max_items (excluding hidden)
         await db.execute("""
             DELETE FROM feed_items 
-            WHERE feed_id = ? AND id NOT IN (
+            WHERE feed_id = ? AND is_hidden = 0 AND id NOT IN (
                 SELECT id FROM feed_items 
-                WHERE feed_id = ? 
+                WHERE feed_id = ? AND is_hidden = 0
                 ORDER BY pub_date DESC 
                 LIMIT ?
             )
@@ -149,17 +181,34 @@ async def add_feed_items(feed_id: int, items: list[dict], max_items: int = 30):
 
 
 async def get_feed_items(feed_id: int, limit: int = 30) -> list[dict]:
-    """Get items from a specific feed"""
+    """Get items from a specific feed (excluding hidden)"""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("""
             SELECT * FROM feed_items 
-            WHERE feed_id = ? 
+            WHERE feed_id = ? AND is_hidden = 0
             ORDER BY pub_date DESC 
             LIMIT ?
         """, (feed_id, limit))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+async def hide_feed_item(item_id: int):
+    """Hide a specific feed item"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE feed_items SET is_hidden = 1 WHERE id = ?",
+            (item_id,)
+        )
+        await db.commit()
+
+
+async def delete_feed_item(item_id: int):
+    """Permanently delete a specific feed item"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM feed_items WHERE id = ?", (item_id,))
+        await db.commit()
 
 
 async def cleanup_old_items(cutoff_date: datetime):
@@ -170,5 +219,3 @@ async def cleanup_old_items(cutoff_date: datetime):
             (cutoff_date,)
         )
         await db.commit()
-
-

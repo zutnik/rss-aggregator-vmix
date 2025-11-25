@@ -43,10 +43,12 @@ async function addFeed(event) {
     
     const urlInput = document.getElementById('feedUrl');
     const nameInput = document.getElementById('feedName');
+    const maxItemsInput = document.getElementById('feedMaxItems');
     const submitBtn = event.target.querySelector('button[type="submit"]');
     
     const url = urlInput.value.trim();
     const name = nameInput.value.trim();
+    const maxItems = parseInt(maxItemsInput.value) || 30;
     
     if (!url) {
         showToast('Введіть URL стрічки', 'error');
@@ -63,7 +65,7 @@ async function addFeed(event) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ url, name: name || null })
+            body: JSON.stringify({ url, name: name || null, max_items: maxItems })
         });
         
         if (!response.ok) {
@@ -77,6 +79,7 @@ async function addFeed(event) {
         // Clear form and reload page
         urlInput.value = '';
         nameInput.value = '';
+        maxItemsInput.value = '30';
         window.location.reload();
         
     } catch (error) {
@@ -155,9 +158,54 @@ async function refreshFeeds() {
     }
 }
 
+// ============ Edit Feed ============
+
+function editFeed(feedId, name, maxItems) {
+    document.getElementById('editFeedId').value = feedId;
+    document.getElementById('editFeedName').value = name;
+    document.getElementById('editMaxItems').value = maxItems;
+    document.getElementById('editModal').classList.add('active');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.remove('active');
+}
+
+async function saveFeedSettings(event) {
+    event.preventDefault();
+    
+    const feedId = document.getElementById('editFeedId').value;
+    const name = document.getElementById('editFeedName').value.trim();
+    const maxItems = parseInt(document.getElementById('editMaxItems').value);
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/feeds/${feedId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name, max_items: maxItems })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Помилка збереження');
+        }
+        
+        showToast('Налаштування збережено!', 'success');
+        closeEditModal();
+        window.location.reload();
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
 // ============ Modal Functions ============
 
+let currentFeedId = null;
+
 async function viewFeed(feedId) {
+    currentFeedId = feedId;
     const modal = document.getElementById('feedModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalBody = document.getElementById('modalBody');
@@ -189,13 +237,21 @@ async function viewFeed(feedId) {
         }
         
         modalBody.innerHTML = itemsData.items.map(item => `
-            <div class="news-item">
-                <h4><a href="${escapeHtml(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a></h4>
-                <p class="description">${escapeHtml(stripHtml(item.description || ''))}</p>
-                <div class="meta">
-                    ${item.pub_date ? formatDate(item.pub_date) : ''}
-                    ${item.author ? ` • ${escapeHtml(item.author)}` : ''}
+            <div class="news-item" data-item-id="${item.id}">
+                <div class="news-item-content">
+                    <h4><a href="${escapeHtml(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a></h4>
+                    <p class="description">${escapeHtml(stripHtml(item.description || ''))}</p>
+                    <div class="meta">
+                        ${item.pub_date ? formatDate(item.pub_date) : ''}
+                        ${item.author ? ` • ${escapeHtml(item.author)}` : ''}
+                    </div>
                 </div>
+                <button class="btn btn-icon btn-small btn-danger" onclick="deleteItem(${item.id})" title="Видалити">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
         `).join('');
         
@@ -208,9 +264,39 @@ async function viewFeed(feedId) {
     }
 }
 
+async function deleteItem(itemId) {
+    if (!confirm('Видалити цю новину?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/items/${itemId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Помилка видалення');
+        }
+        
+        // Remove item from DOM
+        const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemEl) {
+            itemEl.style.opacity = '0';
+            itemEl.style.transform = 'translateX(20px)';
+            setTimeout(() => itemEl.remove(), 200);
+        }
+        
+        showToast('Новину видалено', 'success');
+        
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
 function closeModal() {
     const modal = document.getElementById('feedModal');
     modal.classList.remove('active');
+    currentFeedId = null;
 }
 
 // Close modal on outside click
@@ -220,10 +306,17 @@ document.getElementById('feedModal').addEventListener('click', (e) => {
     }
 });
 
+document.getElementById('editModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        closeEditModal();
+    }
+});
+
 // Close modal on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeModal();
+        closeEditModal();
     }
 });
 
@@ -264,11 +357,14 @@ document.addEventListener('DOMContentLoaded', () => {
         addFeedForm.addEventListener('submit', addFeed);
     }
     
+    const editFeedForm = document.getElementById('editFeedForm');
+    if (editFeedForm) {
+        editFeedForm.addEventListener('submit', saveFeedSettings);
+    }
+    
     // Update endpoint URLs with current origin
     const allFeedsUrl = document.getElementById('allFeedsUrl');
     if (allFeedsUrl) {
         allFeedsUrl.textContent = `${window.location.origin}/rss/all`;
     }
 });
-
-
