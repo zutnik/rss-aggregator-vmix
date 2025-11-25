@@ -35,7 +35,13 @@ VMix та деякі інші програми завантажують **всі
 
 ### Швидкий старт
 
-#### Docker (рекомендовано)
+#### Одна команда (Docker Hub)
+
+```bash
+docker run -d -p 5050:5050 -v rss_data:/app/data --name rss-aggregator 101bogdan/rss-aggregator-vmix
+```
+
+#### Або з docker-compose
 
 ```bash
 docker-compose up -d
@@ -104,7 +110,13 @@ This aggregator:
 
 ### Quick Start
 
-#### Docker (recommended)
+#### One command (Docker Hub)
+
+```bash
+docker run -d -p 5050:5050 -v rss_data:/app/data --name rss-aggregator 101bogdan/rss-aggregator-vmix
+```
+
+#### Or with docker-compose
 
 ```bash
 docker-compose up -d
